@@ -1,0 +1,166 @@
+From 79a8bf3e654f21dcea777fada48d10299e954296 Mon Sep 17 00:00:00 2001
+From: Tiago Natel de Moura <tiago.natel@neoway.com.br>
+Date: Sun, 20 Nov 2016 02:47:32 -0200
+Subject: [PATCH] add new osdev host
+
+Signed-off-by: Tiago Natel de Moura <tiago.natel@neoway.com.br>
+---
+ src/cmd/api/goapi.go             | 2 ++
+ src/cmd/dist/build.go            | 2 ++
+ src/cmd/internal/obj/link.go     | 1 +
+ src/cmd/internal/obj/sym.go      | 1 +
+ src/cmd/internal/obj/x86/asm6.go | 3 ++-
+ src/cmd/internal/obj/x86/obj6.go | 5 +++--
+ src/cmd/link/internal/x86/asm.go | 3 ++-
+ src/go/build/syslist.go          | 2 +-
+ src/runtime/lock_sema.go         | 2 +-
+ src/runtime/write_err.go         | 1 +
+ 10 files changed, 16 insertions(+), 6 deletions(-)
+
+diff --git a/src/cmd/api/goapi.go b/src/cmd/api/goapi.go
+index 936f9e5..fa4a6dc 100644
+--- a/src/cmd/api/goapi.go
++++ b/src/cmd/api/goapi.go
+@@ -68,6 +68,8 @@ var contexts = []*build.Context{
+ 	{GOOS: "openbsd", GOARCH: "386"},
+ 	{GOOS: "openbsd", GOARCH: "amd64", CgoEnabled: true},
+ 	{GOOS: "openbsd", GOARCH: "amd64"},
++	{GOOS: "osdev", GOARCH: "386", CgoEnabled: true},
++	{GOOS: "osdev", GOARCH: "386"},
+ }
+ 
+ func contextName(c *build.Context) string {
+diff --git a/src/cmd/dist/build.go b/src/cmd/dist/build.go
+index 9eb9caf..d0ff632 100644
+--- a/src/cmd/dist/build.go
++++ b/src/cmd/dist/build.go
+@@ -76,6 +76,7 @@ var okgoos = []string{
+ 	"openbsd",
+ 	"plan9",
+ 	"windows",
++	"osdev",
+ }
+ 
+ // find reports the first index of p in l[0:n], or else -1.
+@@ -1120,6 +1121,7 @@ var cgoEnabled = map[string]bool{
+ 	"solaris/amd64":   true,
+ 	"windows/386":     true,
+ 	"windows/amd64":   true,
++	"osdev/386":       true,
+ }
+ 
+ func needCC() bool {
+diff --git a/src/cmd/internal/obj/link.go b/src/cmd/internal/obj/link.go
+index b6861f4..7c05e31 100644
+--- a/src/cmd/internal/obj/link.go
++++ b/src/cmd/internal/obj/link.go
+@@ -725,6 +725,7 @@ const (
+ 	Hplan9
+ 	Hsolaris
+ 	Hwindows
++	Hosdev
+ )
+ 
+ // AsmBuf is a simple buffer to assemble variable-length x86 instructions into.
+diff --git a/src/cmd/internal/obj/sym.go b/src/cmd/internal/obj/sym.go
+index e974ca8..cc0ddc0 100644
+--- a/src/cmd/internal/obj/sym.go
++++ b/src/cmd/internal/obj/sym.go
+@@ -55,6 +55,7 @@ var headers = []struct {
+ 	{"solaris", Hsolaris},
+ 	{"windows", Hwindows},
+ 	{"windowsgui", Hwindows},
++	{"osdev", Hosdev},
+ }
+ 
+ func headtype(name string) int {
+diff --git a/src/cmd/internal/obj/x86/asm6.go b/src/cmd/internal/obj/x86/asm6.go
+index 676da40..30d2629 100644
+--- a/src/cmd/internal/obj/x86/asm6.go
++++ b/src/cmd/internal/obj/x86/asm6.go
+@@ -2216,7 +2216,8 @@ func prefixof(ctxt *obj.Link, p *obj.Prog, a *obj.Addr) int {
+ 				obj.Hfreebsd,
+ 				obj.Hnetbsd,
+ 				obj.Hopenbsd,
+-				obj.Hsolaris:
++				obj.Hsolaris,
++				obj.Hosdev:
+ 				return 0x64 // FS
+ 
+ 			case obj.Hdarwin:
+diff --git a/src/cmd/internal/obj/x86/obj6.go b/src/cmd/internal/obj/x86/obj6.go
+index 75638a0..7b9cece 100644
+--- a/src/cmd/internal/obj/x86/obj6.go
++++ b/src/cmd/internal/obj/x86/obj6.go
+@@ -54,7 +54,8 @@ func CanUse1InsnTLS(ctxt *obj.Link) bool {
+ 		case obj.Hlinux,
+ 			obj.Hnacl,
+ 			obj.Hplan9,
+-			obj.Hwindows:
++			obj.Hwindows,
++			obj.Hosdev:
+ 			return false
+ 		}
+ 
+@@ -65,7 +66,7 @@ func CanUse1InsnTLS(ctxt *obj.Link) bool {
+ 	case obj.Hplan9,
+ 		obj.Hwindows:
+ 		return false
+-	case obj.Hlinux:
++	case obj.Hlinux, obj.Hosdev:
+ 		return !ctxt.Flag_shared
+ 	}
+ 
+diff --git a/src/cmd/link/internal/x86/asm.go b/src/cmd/link/internal/x86/asm.go
+index cc8f96f..85a0a0a 100644
+--- a/src/cmd/link/internal/x86/asm.go
++++ b/src/cmd/link/internal/x86/asm.go
+@@ -738,7 +738,8 @@ func asmb() {
+ 		obj.Hfreebsd,
+ 		obj.Hnetbsd,
+ 		obj.Hopenbsd,
+-		obj.Hnacl:
++		obj.Hnacl,
++		obj.Hosdev:
+ 		ld.Asmbelf(int64(symo))
+ 
+ 	case obj.Hwindows:
+diff --git a/src/go/build/syslist.go b/src/go/build/syslist.go
+index c83622b..9a21431 100644
+--- a/src/go/build/syslist.go
++++ b/src/go/build/syslist.go
+@@ -4,5 +4,5 @@
+ 
+ package build
+ 
+-const goosList = "android darwin dragonfly freebsd linux nacl netbsd openbsd plan9 solaris windows "
++const goosList = "android darwin dragonfly freebsd linux nacl netbsd openbsd plan9 solaris windows osdev "
+ const goarchList = "386 amd64 amd64p32 arm armbe arm64 arm64be ppc64 ppc64le mips mipsle mips64 mips64le mips64p32 mips64p32le ppc s390 s390x sparc sparc64 "
+diff --git a/src/runtime/lock_sema.go b/src/runtime/lock_sema.go
+index 0fa0481..dc96360 100644
+--- a/src/runtime/lock_sema.go
++++ b/src/runtime/lock_sema.go
+@@ -2,7 +2,7 @@
+ // Use of this source code is governed by a BSD-style
+ // license that can be found in the LICENSE file.
+ 
+-// +build darwin nacl netbsd openbsd plan9 solaris windows
++// +build darwin nacl netbsd openbsd plan9 solaris windows osdev
+ 
+ package runtime
+ 
+diff --git a/src/runtime/write_err.go b/src/runtime/write_err.go
+index 6b1467b..61b44be 100644
+--- a/src/runtime/write_err.go
++++ b/src/runtime/write_err.go
+@@ -3,6 +3,7 @@
+ // license that can be found in the LICENSE file.
+ 
+ // +build !android
++// +build !osdev
+ 
+ package runtime
+ 
+-- 
+2.10.2
+
